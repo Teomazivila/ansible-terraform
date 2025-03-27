@@ -1,93 +1,108 @@
-# Dockerfile for setting up an Ubuntu container with DevOps tools
-FROM ubuntu:24.04
+# Dockerfile for a lightweight DevOps tools container
+FROM python:3.12-alpine
 
-# Set timezone and non-interactive mode (least likely to change)
+# Set timezone and environment variables (least likely to change)
 ENV TZ=Europe/Minsk \
-    DEBIAN_FRONTEND=noninteractive
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    PYTHONUNBUFFERED=1
 
-# Add all repository sources first (changes less frequently)
-RUN apt-get -qy update && apt-get install -qy \
-    software-properties-common \
-    apt-transport-https \
-    ca-certificates \
-    gnupg \
+# Install basic dependencies (changes less frequently)
+RUN apk add --no-cache \
+    bash \
     curl \
     wget \
-    lsb-release \
-    && apt-add-repository --yes --update ppa:ansible/ansible \
-    # HashiCorp repository
-    && curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" > /etc/apt/sources.list.d/hashicorp.list \
-    # Google Cloud repository
-    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" > /etc/apt/sources.list.d/google-cloud-sdk.list \
-    && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - \
-    # Docker repository
-    && install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
-    && chmod a+r /etc/apt/keyrings/docker.asc \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list \
-    && apt-get -qy update
-
-# Install core tools and utilities (common dependencies most likely to be reused)
-RUN apt-get install -qy \
     git \
-    unzip \
     jq \
+    openssl \
+    ca-certificates \
+    tzdata \
+    unzip \
     vim \
-    less \
-    python3 \
-    python3-pip \
     sshpass \
-    net-tools \
-    iputils-ping \
-    dnsutils \
-    && apt-get clean
+    openssh-client \
+    gnupg \
+    && cp /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone
 
-# Install infrastructure tools from apt (most likely to change, but install via apt)
-RUN apt-get install -qy \
+# Install build dependencies for Python packages
+RUN apk add --no-cache \
+    python3-dev \
+    gcc \
+    g++ \
+    make \
+    libffi-dev \
+    musl-dev
+
+# Install Python packages (separate layer for Python packages)
+RUN pip3 install --no-cache-dir \
     ansible \
     ansible-lint \
-    terraform \
-    packer \
-    docker-ce-cli \
-    google-cloud-cli \
-    && apt-get clean
+    boto3 \
+    botocore \
+    openshift \
+    kubernetes \
+    yamllint \
+    pywinrm
 
-# Install Azure CLI (separate layer for cloud tools)
-RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash \
-    && apt-get clean
+# Install Ansible Galaxy collections
+RUN mkdir -p /root/.ansible/collections \
+    && ansible-galaxy collection install \
+       ansible.posix \
+       community.general \
+       community.docker \
+       community.aws
 
-# Install AWS CLI (separate layer because it's downloaded as a binary)
+# Install Terraform
+RUN wget -O /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.8.0/terraform_1.8.0_linux_amd64.zip" \
+    && unzip /tmp/terraform.zip -d /usr/local/bin \
+    && rm /tmp/terraform.zip \
+    && chmod +x /usr/local/bin/terraform
+
+# Install OpenTofu (alternative to Terraform)
+RUN wget -O /tmp/opentofu.zip "https://github.com/opentofu/opentofu/releases/download/v1.6.2/tofu_1.6.2_linux_amd64.zip" \
+    && unzip /tmp/opentofu.zip -d /usr/local/bin \
+    && rm /tmp/opentofu.zip \
+    && chmod +x /usr/local/bin/tofu
+
+# Install Terragrunt
+RUN wget -O /usr/local/bin/terragrunt "https://github.com/gruntwork-io/terragrunt/releases/download/v0.54.17/terragrunt_linux_amd64" \
+    && chmod +x /usr/local/bin/terragrunt
+
+# Install AWS CLI
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
     && unzip awscliv2.zip \
     && ./aws/install \
     && rm -rf aws awscliv2.zip
 
-# Install Kubernetes tools (separate layer for k8s)
+# Install kubectl
 RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
     && chmod +x kubectl \
-    && mv kubectl /usr/local/bin/ \
-    && curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+    && mv kubectl /usr/local/bin/
 
-# Install Ansible Galaxy collections (separate layer for collections)
-RUN ansible-galaxy collection install \
-    ansible.posix \
-    community.general \
-    community.docker \
-    community.aws
+# Install Helm
+RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
+# Install Packer
+RUN wget -O /tmp/packer.zip "https://releases.hashicorp.com/packer/1.10.0/packer_1.10.0_linux_amd64.zip" \
+    && unzip /tmp/packer.zip -d /usr/local/bin \
+    && rm /tmp/packer.zip \
+    && chmod +x /usr/local/bin/packer
 
-# Install alternative IaC tools (separate layer for binary tools) 
-RUN curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh \
-    && chmod +x install-opentofu.sh \
-    && ./install-opentofu.sh --install-method standalone \
-    && rm install-opentofu.sh \
-    && curl -Lo /usr/local/bin/terragrunt "https://github.com/gruntwork-io/terragrunt/releases/download/v0.54.17/terragrunt_linux_amd64" \
-    && chmod +x /usr/local/bin/terragrunt
+# Install minimal Azure CLI (using pip instead of the large package)
+RUN pip install --no-cache-dir azure-cli
 
-# Final cleanup (always run at the end)
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+# Install minimal Google Cloud SDK CLI tools
+RUN curl -sSL https://sdk.cloud.google.com > /tmp/gcl \
+    && bash /tmp/gcl --install-dir=/usr/local --disable-prompts \
+    && rm /tmp/gcl
+
+# Add Docker CLI only
+RUN wget -O /tmp/docker.tgz https://download.docker.com/linux/static/stable/x86_64/docker-24.0.7.tgz \
+    && tar xzvf /tmp/docker.tgz --strip 1 -C /usr/local/bin docker/docker \
+    && rm /tmp/docker.tgz
+
+# Create a non-root user for security
+RUN addgroup -S devops && adduser -S devops -G devops
+USER devops
 
 # Set up a working directory
 WORKDIR /workspace

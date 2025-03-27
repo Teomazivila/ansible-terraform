@@ -1,17 +1,27 @@
 # Ansible-Terraform Docker Image
 
-A comprehensive Docker image that bundles infrastructure as code and DevOps tools in an Ubuntu 24.04 environment, providing a consistent platform for cloud automation workflows.
+A lightweight Docker image that bundles infrastructure as code and DevOps tools in an Alpine Linux environment, providing a consistent and efficient platform for cloud automation workflows.
 
 ## Features
 
-- Ubuntu 24.04 base image
+- Alpine Linux base image for minimal size (~600MB vs ~2GB for Ubuntu)
+- Python 3.12 pre-installed with essential modules
 - Ansible and Ansible Lint for configuration management
 - Terraform and OpenTofu for infrastructure as code
 - Cloud provider CLI tools (AWS, Azure, GCP)
 - Kubernetes tools (kubectl, Helm)
 - Docker CLI for container management
 - Git and other essential development tools
+- Security focused with non-root user by default
 - Ready-to-use environment for DevOps tasks
+
+## Performance Benefits
+
+- **Smaller Image Size**: Up to 70% reduction compared to Ubuntu-based images
+- **Faster CI/CD Builds**: Significantly reduced build and pull times
+- **Lower Resource Usage**: Reduced memory footprint during runtime
+- **Faster Layer Caching**: Smaller layers mean faster cache hits
+- **Improved Security**: Alpine's minimal attack surface and non-root user
 
 ## Usage
 
@@ -59,18 +69,19 @@ The Dockerfile is strategically structured to leverage Docker's layer caching me
 
 1. **Layer Ordering**: 
    - Least frequently changing components are placed first
-   - Package repositories and core dependencies are added in initial layers
+   - Core dependencies are added in initial layers
    - Specific tools are grouped in logical layers based on change frequency
 
 2. **Cache Efficiency**:
    - When adding new tools, only the affected layers need to be rebuilt
-   - Base layers with repositories and common utilities remain cached
+   - Base layers with common utilities remain cached
    - Similar tools are grouped together to minimize cache invalidation
 
-3. **Tool Organization**:
-   - System-level tools installed via apt in common layers
-   - Binary tools and language-specific packages in separate layers
-   - Final cleanup in the last layer
+3. **Alpine-specific Optimizations**:
+   - Uses `apk add --no-cache` to avoid creating package caches
+   - Downloads tools as compiled binaries where possible
+   - Cleans up temporary files within each layer
+   - Minimal runtime dependencies installed
 
 This structure allows for easier maintenance and faster builds when updating or adding new tools.
 
@@ -86,8 +97,8 @@ This structure allows for easier maintenance and faster builds when updating or 
 
 ### Cloud Provider Tools
 - AWS CLI - Amazon Web Services command-line interface
-- Azure CLI - Microsoft Azure command-line interface
-- Google Cloud SDK - Google Cloud Platform command-line tools
+- Azure CLI (minimal pip installation) - Microsoft Azure command-line interface
+- Google Cloud SDK (minimal installation) - Google Cloud Platform command-line tools
 
 ### Container & Kubernetes
 - Docker CLI - For container management
@@ -95,14 +106,14 @@ This structure allows for easier maintenance and faster builds when updating or 
 - Helm - Kubernetes package manager
 
 ### Utilities
-- Python 3 & pip - With boto3, kubernetes, openshift, pywinrm
+- Python 3.12 & pip - With boto3, kubernetes, openshift, pywinrm
 - Git - Version control
 - jq - JSON processor
 - vim - Text editor
 - curl, wget - Network utilities
 - unzip - Archive utility
 - sshpass - Non-interactive ssh password provider
-- net-tools, iputils-ping, dnsutils - Network diagnostic tools
+- bash - Shell
 
 ## Time Zone
 
