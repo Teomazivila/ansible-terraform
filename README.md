@@ -1,13 +1,16 @@
 # Ansible-Terraform Docker Image
 
-A Docker image that bundles Ansible and Terraform in an Ubuntu 24.04 environment, providing a consistent platform for infrastructure automation workflows.
+A comprehensive Docker image that bundles infrastructure as code and DevOps tools in an Ubuntu 24.04 environment, providing a consistent platform for cloud automation workflows.
 
 ## Features
 
 - Ubuntu 24.04 base image
 - Ansible and Ansible Lint for configuration management
-- Terraform for infrastructure as code
-- Git and other essential tools pre-installed
+- Terraform and OpenTofu for infrastructure as code
+- Cloud provider CLI tools (AWS, Azure, GCP)
+- Kubernetes tools (kubectl, Helm)
+- Docker CLI for container management
+- Git and other essential development tools
 - Ready-to-use environment for DevOps tasks
 
 ## Usage
@@ -52,12 +55,33 @@ docker run -it -v $(pwd):/workspace -w /workspace <your-dockerhub-username>/ansi
 
 ## Included Tools
 
-- Ansible (from PPA repository)
-- Ansible Lint
-- Terraform (latest version from HashiCorp)
-- Git
-- Python
-- Common software utilities
+### Infrastructure as Code
+- Terraform - HashiCorp's infrastructure as code tool
+- OpenTofu - Community-driven Terraform alternative
+- Terragrunt - Terraform wrapper for DRY configurations
+- Packer - HashiCorp's machine image builder
+- Ansible & Ansible Lint - Configuration management and deployment
+- Ansible Galaxy collections - General, Posix, Docker, AWS
+
+### Cloud Provider Tools
+- AWS CLI - Amazon Web Services command-line interface
+- Azure CLI - Microsoft Azure command-line interface
+- Google Cloud SDK - Google Cloud Platform command-line tools
+
+### Container & Kubernetes
+- Docker CLI - For container management
+- kubectl - Kubernetes command-line tool
+- Helm - Kubernetes package manager
+
+### Utilities
+- Python 3 & pip - With boto3, kubernetes, openshift, pywinrm
+- Git - Version control
+- jq - JSON processor
+- vim - Text editor
+- curl, wget - Network utilities
+- unzip - Archive utility
+- sshpass - Non-interactive ssh password provider
+- net-tools, iputils-ping, dnsutils - Network diagnostic tools
 
 ## Time Zone
 
