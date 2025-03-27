@@ -77,14 +77,6 @@ RUN ansible-galaxy collection install \
     community.docker \
     community.aws
 
-# Install Python packages (separate layer for Python packages)
-RUN pip3 install --no-cache-dir \
-    boto3 \
-    botocore \
-    openshift \
-    kubernetes \
-    yamllint \
-    pywinrm
 
 # Install alternative IaC tools (separate layer for binary tools) 
 RUN curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh \
