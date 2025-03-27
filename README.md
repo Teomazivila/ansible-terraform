@@ -53,6 +53,27 @@ docker pull <your-dockerhub-username>/ansible-terraform:1.2
 docker run -it -v $(pwd):/workspace -w /workspace <your-dockerhub-username>/ansible-terraform:tag
 ```
 
+## Build Optimization
+
+The Dockerfile is strategically structured to leverage Docker's layer caching mechanism, making builds faster and more efficient:
+
+1. **Layer Ordering**: 
+   - Least frequently changing components are placed first
+   - Package repositories and core dependencies are added in initial layers
+   - Specific tools are grouped in logical layers based on change frequency
+
+2. **Cache Efficiency**:
+   - When adding new tools, only the affected layers need to be rebuilt
+   - Base layers with repositories and common utilities remain cached
+   - Similar tools are grouped together to minimize cache invalidation
+
+3. **Tool Organization**:
+   - System-level tools installed via apt in common layers
+   - Binary tools and language-specific packages in separate layers
+   - Final cleanup in the last layer
+
+This structure allows for easier maintenance and faster builds when updating or adding new tools.
+
 ## Included Tools
 
 ### Infrastructure as Code
@@ -93,6 +114,27 @@ This repository includes a GitHub Actions workflow that automatically builds and
 - Changes are pushed to the main/master branch
 - A new tag with prefix 'v' is created (e.g., v1.0.0)
 - Manually triggered via GitHub Actions interface
+
+### Build Performance Optimization
+
+The CI/CD workflow is optimized to minimize build times through several caching strategies:
+
+1. **Multi-level Caching**:
+   - GitHub Actions cache for persistent layer storage between workflow runs
+   - Registry-based caching to leverage previously pushed images
+   - Local BuildKit cache for efficient layer reuse
+
+2. **Cache Sources**:
+   - Latest image from DockerHub used as cache source
+   - Major version images used as fallback cache
+   - Local cached layers from previous builds
+
+3. **BuildKit Optimizations**:
+   - Uses Docker BuildKit with inline caching enabled
+   - Container-based BuildKit driver for better performance
+   - Parallel building of multiple platforms
+
+These optimizations ensure that when you add new tools or update existing ones, the build process reuses as many layers as possible from previous builds, significantly reducing build times and bandwidth usage.
 
 ### Automatic Versioning
 
