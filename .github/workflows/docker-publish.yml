@@ -15,7 +15,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write  # Needed for tag creation
       packages: write
 
     steps:
@@ -37,50 +37,74 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Calculate Semantic Version
+      - name: Calculate and Create Semantic Version
         id: versioning
+        if: github.event_name != 'pull_request'
         run: |
-          # Default version if no tags exist
-          VERSION="v0.3.2"
+          # Configure git for tag creation
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
           
           # Check if this is a tag push
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
             # Extract version from tag (remove 'v' prefix)
             VERSION=${GITHUB_REF#refs/tags/v}
             echo "Using version from tag: $VERSION"
+            AUTO_TAG_CREATED="false"
           else
             # Get latest tag
             LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            echo "Latest tag: $LATEST_TAG"
             
             # Extract base version from latest tag
             BASE_VERSION=${LATEST_TAG#v}
             
-            # Count commits since latest tag
-            COMMITS=$(git rev-list ${LATEST_TAG}..HEAD --count 2>/dev/null || echo "0")
+            # Split version into components
+            IFS='.' read -r -a VERSION_PARTS <<< "$BASE_VERSION"
+            MAJOR="${VERSION_PARTS[0]}"
+            MINOR="${VERSION_PARTS[1]:-0}"
+            PATCH="${VERSION_PARTS[2]:-0}"
             
-            # Create a pre-release version for non-tag builds
-            if [ "$COMMITS" -gt "0" ]; then
-              # Split version into components
-              IFS='.' read -r -a VERSION_PARTS <<< "$BASE_VERSION"
-              MAJOR="${VERSION_PARTS[0]}"
-              MINOR="${VERSION_PARTS[1]:-0}"
-              PATCH="${VERSION_PARTS[2]:-0}"
-              
-              # For builds from branches, increment patch and add dev suffix
-              VERSION="${MAJOR}.${MINOR}.$((PATCH))-dev.${COMMITS}"
+            # Default increment strategy: patch version
+            NEW_PATCH=$((PATCH + 1))
+            NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+            
+            # Check for commit message indicators for major or minor version bumps
+            COMMIT_MSG=$(git log -1 --pretty=%B)
+            if [[ "$COMMIT_MSG" == *"#major"* ]]; then
+              NEW_MAJOR=$((MAJOR + 1))
+              NEW_VERSION="${NEW_MAJOR}.0.0"
+              echo "Major version bump detected in commit message"
+            elif [[ "$COMMIT_MSG" == *"#minor"* ]]; then
+              NEW_MINOR=$((MINOR + 1))
+              NEW_VERSION="${MAJOR}.${NEW_MINOR}.0"
+              echo "Minor version bump detected in commit message"
             else
-              VERSION="$BASE_VERSION"
+              echo "Patch version bump (default)"
             fi
             
-            echo "Calculated version: $VERSION"
+            VERSION="$NEW_VERSION"
+            echo "New version: $VERSION"
+            
+            # Create a new tag and push it
+            # Only do this for main/master branch pushes, not for pull requests or tags
+            if [[ "$GITHUB_REF" == "refs/heads/main" || "$GITHUB_REF" == "refs/heads/master" ]]; then
+              echo "Creating new tag v${VERSION}"
+              git tag "v${VERSION}"
+              git push origin "v${VERSION}"
+              AUTO_TAG_CREATED="true"
+            else
+              AUTO_TAG_CREATED="false"
+            fi
           fi
           
           # Output the version for use in later steps
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "full_version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "auto_tag_created=${AUTO_TAG_CREATED}" >> $GITHUB_OUTPUT
           
           # Extract components for separate tags
-          IFS='.' read -r -a VERSION_PARTS <<< "${VERSION%-*}"
+          IFS='.' read -r -a VERSION_PARTS <<< "${VERSION}"
           MAJOR="${VERSION_PARTS[0]}"
           MINOR="${VERSION_PARTS[1]:-0}"
           
@@ -96,7 +120,7 @@ jobs:
             type=raw,value=${{ steps.versioning.outputs.full_version }}
             type=raw,value=${{ steps.versioning.outputs.major_minor }}
             type=raw,value=${{ steps.versioning.outputs.major }}
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/tags/v') }}
             type=sha,format=short,prefix=commit-
 
       - name: Build and push Docker image

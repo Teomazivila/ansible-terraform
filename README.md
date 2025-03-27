@@ -70,6 +70,23 @@ This repository includes a GitHub Actions workflow that automatically builds and
 - A new tag with prefix 'v' is created (e.g., v1.0.0)
 - Manually triggered via GitHub Actions interface
 
+### Automatic Versioning
+
+The CI/CD pipeline automatically handles versioning for you:
+
+1. When you push to the main/master branch, a new version tag is automatically created and pushed:
+   - By default, the patch version is incremented (e.g., 1.0.0 → 1.0.1)
+   - Include `#minor` in your commit message to bump the minor version (e.g., 1.0.0 → 1.1.0)
+   - Include `#major` in your commit message to bump the major version (e.g., 1.0.0 → 2.0.0)
+
+2. The Docker image is then built and tagged with:
+   - Full version tag (e.g., 1.2.3)
+   - Major.Minor tag (e.g., 1.2)
+   - Major version tag (e.g., 1)
+   - Latest tag
+
+You don't need to manually create tags - the workflow handles this automatically!
+
 ### Versioning Strategy
 
 The image follows semantic versioning principles with the following tag formats:
@@ -78,15 +95,7 @@ The image follows semantic versioning principles with the following tag formats:
 - `X.Y.Z` - Specific version (e.g., `1.2.3`)
 - `X.Y` - Latest patch version of a specific minor version (e.g., `1.2`)
 - `X` - Latest minor.patch version of a specific major version (e.g., `1`)
-- `X.Y.Z-dev.N` - Development builds with N commits after version X.Y.Z
 - `commit-abc123` - Specific commit hash for precise tracking
-
-To create a new version, simply create and push a git tag with the format `vX.Y.Z`:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
 
 ### Setup for GitHub Actions
 

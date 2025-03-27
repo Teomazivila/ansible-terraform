@@ -8,7 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Update Ubuntu Software repository
 RUN apt-get -qy update
 
-RUN apt install -qy python software-properties-common git curl
+RUN apt install -qy python3-pip software-properties-common git curl wget
 RUN apt-add-repository --yes --update ppa:ansible/ansible
 RUN apt install -qy ansible ansible-lint
 
