@@ -1,0 +1,113 @@
+name: Build and Publish Docker Image
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  IMAGE_NAME: ansible-terraform
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for proper versioning
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to DockerHub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Calculate Semantic Version
+        id: versioning
+        run: |
+          # Default version if no tags exist
+          VERSION="v0.3.2"
+          
+          # Check if this is a tag push
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            # Extract version from tag (remove 'v' prefix)
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "Using version from tag: $VERSION"
+          else
+            # Get latest tag
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            
+            # Extract base version from latest tag
+            BASE_VERSION=${LATEST_TAG#v}
+            
+            # Count commits since latest tag
+            COMMITS=$(git rev-list ${LATEST_TAG}..HEAD --count 2>/dev/null || echo "0")
+            
+            # Create a pre-release version for non-tag builds
+            if [ "$COMMITS" -gt "0" ]; then
+              # Split version into components
+              IFS='.' read -r -a VERSION_PARTS <<< "$BASE_VERSION"
+              MAJOR="${VERSION_PARTS[0]}"
+              MINOR="${VERSION_PARTS[1]:-0}"
+              PATCH="${VERSION_PARTS[2]:-0}"
+              
+              # For builds from branches, increment patch and add dev suffix
+              VERSION="${MAJOR}.${MINOR}.$((PATCH))-dev.${COMMITS}"
+            else
+              VERSION="$BASE_VERSION"
+            fi
+            
+            echo "Calculated version: $VERSION"
+          fi
+          
+          # Output the version for use in later steps
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "full_version=${VERSION}" >> $GITHUB_OUTPUT
+          
+          # Extract components for separate tags
+          IFS='.' read -r -a VERSION_PARTS <<< "${VERSION%-*}"
+          MAJOR="${VERSION_PARTS[0]}"
+          MINOR="${VERSION_PARTS[1]:-0}"
+          
+          echo "major=${MAJOR}" >> $GITHUB_OUTPUT
+          echo "major_minor=${MAJOR}.${MINOR}" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.versioning.outputs.full_version }}
+            type=raw,value=${{ steps.versioning.outputs.major_minor }}
+            type=raw,value=${{ steps.versioning.outputs.major }}
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=sha,format=short,prefix=commit-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.opencontainers.image.version=${{ steps.versioning.outputs.full_version }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max 
